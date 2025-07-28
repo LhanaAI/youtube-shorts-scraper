@@ -62,17 +62,40 @@ Before you begin, ensure you have:
         ```python
         # config.py
         DUMMY_ACCOUNTS = [
-            {"id": "dummy_1", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 1"},
+            {"id": "dummy_1", "profile_path": Your chrome profile path, example: "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 1"},
             # Add more accounts as needed
         ]
         RAW_DATA_CSV = 'lhana_shorts_raw_data.csv'
         ```
+        
+2. **Install Chromedriver**
+     - Download chromedriver.exe in https://googlechromelabs.github.io/chrome-for-testing/
+     - Extract file
+     - Paste chromedriver.exe to your clone repository folder/chromedriver_custom  
 
-2.  **Run the Scraper:**
+3.  **Run the Scraper:**
     ```bash
     python main_scraper.py # Or the name of your main scraping script file
     ```
     The script will launch browsers (in headless mode by default), log into dummy accounts, and begin collecting data.
+
+    **NOTE**
+    After browser opened, please log in your YouTube account for better collecting data.
+
+**OPTIONAL**
+**Setting Up Your VPN Extension (Urban VPN)**
+To effectively use the VPN with your dummy accounts, please follow these installation steps carefully:
+
+1. Initial Setup for One Dummy Account: It's highly recommended to run the script with only one dummy account enabled during this setup phase. Temporarily comment out the other dummy accounts in your configuration (config.py) to avoid launching multiple browsers simultaneously.
+2. Navigate to the Chrome Web Store: Once the browser for your single dummy account is open, go to the Chrome Web Store.
+3. Search for Urban VPN: In the search bar, type "Urban VPN" and press Enter.
+4. Add to Chrome: Locate the "Urban VPN" extension and click "Add to Chrome." Follow any on-screen prompts to confirm the addition.
+5. Wait for Installation: Allow the extension to complete its installation process.
+6. Open the Urban VPN Extension: After installation, click on the Urban VPN icon in your browser's toolbar to open its popup.
+7. Agree to Terms: Once the extension's popup appears, click the "Agree" button to accept its terms.
+8. Close the Browser: Close the browser window. The extension's settings and your agreement should now be saved to this dummy account's profile.
+9. Enable VPN in Configuration: To activate the VPN for your scraping session, change the ENABLE_VPN value to True in your config.py file.
+10. Relaunch the Python Script: Execute your Python script again. The VPN should now be active for this dummy account, and you can then enable other dummy accounts as needed.
 
 ## Data Structure (CSV Headers)
 
