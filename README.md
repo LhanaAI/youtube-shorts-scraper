@@ -34,7 +34,7 @@ Before you begin, ensure you have:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone [https://github.com/LhanaAI/youtube-shorts-scraper.git](https://github.com/LhanaAI/youtube-shorts-scraper.git)
+    git clone https://github.com/LhanaAI/youtube-shorts-scraper.git
     cd youtube-shorts-scraper
     ```
 
