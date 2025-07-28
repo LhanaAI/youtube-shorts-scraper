@@ -1,6 +1,6 @@
 # YouTube Shorts Scraper
 
-![Python Version](https://img.shields.io/badge/Python-3.x-blue.svg)
+![Python Version](https://img.shields.io/badge/Python-3.10-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status](https://img.shields.io/badge/Status-Development-orange.svg)
 
