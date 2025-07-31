@@ -51,7 +51,6 @@ Before you begin, ensure you have:
     ```bash
     pip install -r requirements.txt
     ```
-    *(Make sure to create a `requirements.txt` file containing `selenium` and `beautifulsoup4`)*
 
 ## Usage
 
@@ -75,7 +74,7 @@ Before you begin, ensure you have:
 
 3.  **Run the Scraper:**
     ```bash
-    python main_scraper.py # Or the name of your main scraping script file
+    python youtube-shorts-scraper.py # Or the name of your main scraping script file
     ```
     The script will launch browsers (in headless mode by default), log into dummy accounts, and begin collecting data.
 
