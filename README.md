@@ -13,6 +13,11 @@ The primary objectives of `youtube-shorts-scraper` are to:
 - Facilitate the analysis of viral trends and the behavior of YouTube Shorts' recommendation algorithm.
 - Provide clean and structured datasets for the future development of virality prediction models (as part of Lhana AI Phase 1).
 
+## Next Project
+The tool is finally complete. There will be no more major updates, only necessary fixes and adjustments to the HTML structure of YouTube if it changes.
+
+The next phase is data cleansing, which I'll be doing in Google Colab and sharing here. The third and final phase is data analysis. I will not be sharing this part, as it involves a proprietary formula. This is where I'll be pulling YouTube Shorts videos for analysis. I'll be using Google Vision AI to extract the content and OpenAI Whisper to transcribe the audio for keyword searching. Afterward, a final analysis will be conducted using my proprietary XYZ formula.
+
 ## Features
 
 -   **Automated Data Collection:** Utilizes Selenium to simulate user interactions and gather data from YouTube Shorts feeds.
@@ -99,7 +104,7 @@ To effectively use the VPN with your dummy accounts, please follow these install
 ## Data Structure (CSV Headers)
 
 The collected data will be saved in a CSV file with the following headers:
-timestamp_scan,dummy_account_id,video_id,caption,hashtags,description,channel_name,channel_id,raw_views_count,likes_count,comments_count,remix_count,upload_date,extracted_keywords,sound_id,sound_name,sound_artist,video_url_full,watch_duration_sec,video_category
+'timestamp_scan', 'dummy_account_id', 'video_id', 'caption', 'hashtags_on_caption', 'hashtags_on_description', 'description', 'channel_name', 'raw_views_count', 'likes_count', 'comments_count', 'remix_count', 'upload_date', 'extracted_keywords', 'sound_id', 'sound_name', 'sound_artist', 'sound_usage', 'video_url_full', 'watch_duration_sec'
 
 ## Contributing
 
