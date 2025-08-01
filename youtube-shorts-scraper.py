@@ -15,6 +15,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 import tkinter as tk
 import sys
+import json
+import re
 
 # Import configurations from config.py
 from config import (
@@ -22,7 +24,7 @@ from config import (
     MAX_SHORTS_TO_SCRAPE_PER_ACCOUNT, THREAD_START_DELAY_MIN, THREAD_START_DELAY_MAX,
     MIN_BROWSER_WINDOW_SIZE, HORIZONTAL_PADDING, VERTICAL_PADDING, TASKBAR_HEIGHT_ASSUMPTION,
     ENABLE_VPN, VPN_EXTENSION_ID, VPN_EXTENSION_VERSION, VPN_EXTENSIONS_BASE_PATH,
-    CUSTOM_CHROMEDRIVER_DIR
+    CUSTOM_CHROMEDRIVER_DIR, FORMAT_EXT
 )
 
 # --- Dynamic Window Sizing and Positioning Calculation ---
@@ -93,7 +95,6 @@ def calculate_window_layout():
 
 
 # --- Anti-Bot Utility Functions ---
-
 def human_like_delay(min_sec=2, max_sec=5):
     """Introduces a random human-like delay."""
     time.sleep(random.uniform(min_sec, max_sec))
@@ -226,187 +227,196 @@ def init_undetected_driver(profile_path=None, headless=False, position_index=Non
 
 # --- Function to Extract Data from YouTube Shorts Page ---
 def extract_shorts_data(driver, dummy_id, scraped_video_ids):
-    """
+    def extract_shorts_data(driver, dummy_id, scraped_video_ids):
+      """
     Extracts relevant data from the currently displayed YouTube Shorts video.
-    Includes logic to handle encoding issues and extract various metrics.
+    This revised version re-parses the HTML after interactions to ensure data is accurate.
     """
     scraped_data = []
-    
+
     try:
         # Wait until the main shorts video element is loaded.
-        # On youtube.com/shorts, videos are loaded within 'ytd-reel-video-renderer'.
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.TAG_NAME, "ytd-reel-video-renderer"))
         )
         print(f"Dummy account {dummy_id}: Shorts element detected on page.")
 
-        # Get HTML and parse with BeautifulSoup, applying encoding fix for mojibake
-        # This is the crucial fix for the 'â˜ ï¸ðŸ‘€' issue.
-        try:
-            clean_page_source = driver.page_source.encode('latin1').decode('utf-8')
-        except UnicodeEncodeError:
-            clean_page_source = driver.page_source
-            print(f"Warning: Encoding fix failed for {dummy_id}, using original page_source.")
-            
-        soup = BeautifulSoup(clean_page_source, 'html.parser')
-        
-        # Find the active shorts video element (usually one in full view)
+        # Get initial HTML and parse with BeautifulSoup
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
         shorts_element = soup.find("ytd-reel-video-renderer")
-        
+
         if not shorts_element:
-            print(f"Dummy account {dummy_id}: No 'ytd-reel-video-renderer' element found by BeautifulSoup in current view.")
+            print(f"Dummy account {dummy_id}: No 'ytd-reel-video-renderer' element found.")
             return scraped_data
 
-        try:
-            # Extract Video ID from the current URL
-            current_url = driver.current_url
-            video_id = None
-            if "/shorts/" in current_url:
-                video_id = current_url.split("/shorts/")[1].split("?")[0].split("&")[0]
-            elif "/watch?v=" in current_url:
-                video_id = current_url.split("/watch?v=")[1].split("&")[0]
-            
-            if not video_id or video_id in scraped_video_ids:
-                return [] # Return empty list if ID not found or already scraped
+        # Extract Video ID from the current URL
+        current_url = driver.current_url
+        video_id = None
+        if "/shorts/" in current_url:
+            video_id = current_url.split("/shorts/")[1].split("?")[0].split("&")[0]
+        elif "/watch?v=" in current_url:
+            video_id = current_url.split("/watch?v=")[1].split("&")[0]
 
-            full_video_url = f"https://www.youtube.com/shorts/{video_id}" if video_id else "NaN" # Placeholder URL
-
-            # Locate relevant elements within the shorts panel
-            shorts_panel_elems = soup.find("div", id="shorts-panel-container").find("div", id="anchored-panel").find_all("ytd-engagement-panel-section-list-renderer")
-
-            # Check if it's a valid video and not an ad or other panel
-            if len(shorts_panel_elems) > 1: # Assuming second panel is usually details
-                shorts_panel = shorts_panel_elems[1].find("div", id="content").find("ytd-structured-description-content-renderer")
-
-                # Shorts description related elements
-                short_description_elem = soup.find("ytd-video-description-header-renderer")
-                short_description_expander_elem = soup.find("ytd-expandable-video-description-body-renderer")
-
-                # Metapanel for main video info
-                metapanel_elem = soup.find("div", id="metapanel").find("yt-reel-metapanel-view-model")
-
-                # Extract Caption
-                caption_elem = metapanel_elem.find("yt-shorts-video-title-view-model").find("h2").find("span")
-                caption = caption_elem.get_text(strip=True, separator=' ') if caption_elem else "Caption not found"
-
-                # Extract Hashtags
-                hashtags = {
-                    'hashtag_on_caption': [],
-                    'hashtag_on_description': []
-                }
-                hashtags_on_caption_elem = caption_elem.find_all("a", class_="yt-core-attributed-string__link")
-                for hashtag in hashtags_on_caption_elem:
-                    hashtags['hashtag_on_caption'].append(hashtag.get_text(strip=True))
-
-                # Extract Description (requires clicking to expand)
-                is_expanded_button_clicked = False
-                try:
-                    # Attempt to find and click the description expand button
-                    expanded_button = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "div#expanded"))
-                    )
-                    if expanded_button:
-                        expanded_button.click()
-                        print(f"Dummy account {dummy_id}: Clicking description expand button.")
-                        human_like_delay(random.uniform(2, 5))
-                        is_expanded_button_clicked = True
-                except (TimeoutException, NoSuchElementException):
-                    print(f"Dummy account {dummy_id}: Description expand button not found or clickable.")
-                    pass
-
-                description_elem = None
-                if is_expanded_button_clicked and short_description_expander_elem:
-                    description_elem = short_description_expander_elem.find("div", id="expanded").find("yt-formatted-string")
-                elif short_description_expander_elem: # Fallback if button not clicked/found
-                    description_elem = short_description_expander_elem.find("div", id="snippet").find("span", id="snippet-text")
-
-                description = description_elem.get_text(strip=True, separator=' ') if description_elem else "Description not found"
-
-                if description_elem:
-                    hashtags_on_description = description_elem.find_all("a")
-                    for hashtag2 in hashtags_on_description:
-                        hashtags['hashtag_on_description'].append(hashtag2.get_text(strip=True))
-
-                # Extract Channel Name
-                channel_name_elem = shorts_element.find("yt-reel-channel-bar-view-model").find("span").find("a")
-                channel_name = channel_name_elem.get_text(strip=True) if channel_name_elem else "Channel not found"
-                channel_id = "NaN" # Requires further scraping or YouTube Data API
-
-                # Extract Views Count (can be tricky due to dynamic loading and abbreviations)
-                views_count_elem = short_description_elem.find("view-count-factoid-renderer")
-                raw_views_count = views_count_elem.find("span", class_="ytwFactoidRendererValue").find("span").get_text(strip=True) if views_count_elem else "0"
-
-                # Extract Likes Count (often from aria-label)
-                likes_count_elem = short_description_elem.find_all("factoid-renderer")[0]
-                likes_count = likes_count_elem['aria-label'] if likes_count_elem and 'aria-label' in likes_count_elem.attrs else "0"
-
-                # Extract Comments Count (often from aria-label of button)
-                comments_button_elem = shorts_element.find("div", id="comments-button")
-                comments_count = comments_button_elem.find("button")['aria-label'] if comments_button_elem and 'aria-label' in comments_button_elem.find("button").attrs else "0"
-
-                # Extract Remix Count
-                remix_button_elem = shorts_element.find("div", id="remix-button")
-                remix_count = remix_button_elem.find("button")['aria-label'] if remix_button_elem and 'aria-label' in remix_button_elem.find("button").attrs else "0"
-                
-                # Extract Upload Date (tricky from Shorts feed, better with API)
-                upload_date_elem = short_description_elem.find_all("factoid-renderer")[2]
-                upload_date = upload_date_elem['aria-label'] if upload_date_elem and 'aria-label' in upload_date_elem.attrs else "NaN"
-
-                # Simulate video watch duration
-                watch_duration = simulate_watch_video(full_video_url)
-
-                # Extract Keywords
-                keywords_model = metapanel_elem.find("yt-shorts-suggested-action-view-model")
-                extracted_keywords_elem = keywords_model.find("div", class_="ytShortsSuggestedActionViewModelStaticHostPrimaryText").find("span") if keywords_model else None
-                keywords = extracted_keywords_elem.get_text(strip=True, separator=' ') if extracted_keywords_elem else "NaN"
-
-                # Extract Sound Usage
-                marquee_sound_elem = metapanel_elem.find("div", class_="ytReelSoundMetadataViewModelMarqueeContainer")
-                sound_elem = marquee_sound_elem.find("span").find("span").find("span") if marquee_sound_elem else None
-                sound_use = sound_elem.get_text(strip=True) if sound_elem else "NaN"
-                sound_id = "NaN" # Requires further scraping or YouTube Data API
-                sound_name = sound_use # Use sound_use as name for now
-                sound_artist = "NaN" # Requires further scraping or YouTube Data API
-                video_category = "NaN" # Requires further analysis/classification
-
-                scraped_data.append({
-                    'timestamp_scan': datetime.now().isoformat(),
-                    'dummy_account_id': dummy_id,
-                    'video_id': video_id,
-                    'caption': caption,
-                    'hashtags': hashtags, # Storing as dict, consider flattening for CSV
-                    'description': description,
-                    'channel_name': channel_name,
-                    'channel_id': channel_id,
-                    'raw_views_count': raw_views_count,
-                    'likes_count': likes_count,
-                    'comments_count': comments_count,
-                    'remix_count': remix_count, 
-                    'upload_date': upload_date,
-                    'extracted_keywords': keywords,
-                    'sound_id': sound_id,
-                    'sound_name': sound_name,
-                    'sound_artist': sound_artist,
-                    'video_url_full': full_video_url,
-                    'watch_duration_sec': watch_duration,
-                    'video_category': video_category
-                })
-                scraped_video_ids.add(video_id) # Add ID to the set of scraped videos
-            else:
-                print(f"Dummy account {dummy_id}: Detected shorts element appears to be an ad or unparseable.")
-                return []
-
-        except Exception as inner_exception:
-            print(f"Error processing the current video element for {dummy_id}: {inner_exception}")
-            print("--- Traceback Detail ---")
-            traceback.print_exc()
-            print("------------------------")
+        if not video_id or video_id in scraped_video_ids:
             return []
+
+        full_video_url = f"https://www.youtube.com/shorts/{video_id}" if video_id else "NaN"
+
+        # Locate relevant elements from the initial soup
+        metapanel_elem = soup.find("div", id="metapanel").find("yt-reel-metapanel-view-model")
+        short_description_elem = soup.find("ytd-video-description-header-renderer")
+
+        # --- EXTRACTING DATA FROM THE INITIAL PAGE LOAD ---
+        # Caption
+        caption_elem = metapanel_elem.find("yt-shorts-video-title-view-model").find("h2").find("span")
+        caption = caption_elem.get_text(strip=True, separator=' ') if caption_elem else "Caption not found"
+
+        # Channel Name
+        channel_name_elem = shorts_element.find("yt-reel-channel-bar-view-model").find("span").find("a")
+        channel_name = channel_name_elem.get_text(strip=True) if channel_name_elem else "Channel not found"
+
+        # Views Count
+        views_count_elem = short_description_elem.find("view-count-factoid-renderer")
+        raw_views_count = views_count_elem.find("span", class_="ytwFactoidRendererValue").find("span").get_text(strip=True) if views_count_elem else None
+
+        # Likes Count
+        likes_count_elem = shorts_element.find("div", id="like-button")
+        likes_count = likes_count_elem.find("button")['aria-label'] if likes_count_elem and 'aria-label' in likes_count_elem.find("button").attrs else None
+
+        # Comments Count
+        comments_button_elem = shorts_element.find("div", id="comments-button")
+        comments_count = comments_button_elem.find("button")['aria-label'] if comments_button_elem and 'aria-label' in comments_button_elem.find("button").attrs else None
+
+        # Remix Count
+        remix_button_elem = shorts_element.find("div", id="remix-button")
+        remix_count = remix_button_elem.find("button")['aria-label'] if remix_button_elem and 'aria-label' in remix_button_elem.find("button").attrs else None
+
+        # Upload Date
+        upload_date_elem = short_description_elem.find_all("factoid-renderer")[2]
+        upload_date = upload_date_elem.find("div", class_="ytwFactoidRendererFactoid")['aria-label'] if upload_date_elem else "NaN"
+
+        # Simulate video watch duration
+        watch_duration = simulate_watch_video(full_video_url)
+        
+        # Keywords from suggested actions
+        keywords_model = metapanel_elem.find("yt-shorts-suggested-action-view-model")
+        extracted_keywords_elem = keywords_model.find("div", class_="ytShortsSuggestedActionViewModelStaticHostPrimaryText").find("span") if keywords_model else None
+        keywords = extracted_keywords_elem.get_text(strip=True, separator=' ') if extracted_keywords_elem else "NaN"
+
+        # Hashtags on caption
+        hashtags_on_caption = []
+        hashtags_on_caption_elem = caption_elem.find_all("a", class_="yt-core-attributed-string__link")
+        for hashtag in hashtags_on_caption_elem:
+            hashtags_on_caption.append(hashtag.get_text(strip=True))
+
+        # --- EXTRACTING DATA REQUIRING INTERACTION (Clicks) ---
+        description = "Description not found"
+        hashtags_on_description = []
+        sound_id = "NaN"
+        sound_name = "NaN"
+        sound_artist = "NaN"
+        sound_usage = "NaN"
+        
+        # 1. Expand Description
+        try:
+            expanded_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "div#expanded"))
+            )
+            print(f"Dummy account {dummy_id}: Clicking description expand button.")
+            expanded_button.click()
+            human_like_delay(random.uniform(2, 5))
+
+            # RE-PARSE THE HTML AFTER CLICKING
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            short_description_expander_elem = soup.find("ytd-expandable-video-description-body-renderer")
+
+            if short_description_expander_elem:
+                description_elem = short_description_expander_elem.find("div", id="expanded").find("yt-formatted-string")
+                if description_elem:
+                    description = description_elem.get_text(strip=True, separator=' ')
+                    hashtags_on_description_elem = description_elem.find_all("a")
+                    for hashtag2 in hashtags_on_description_elem:
+                        hashtags_on_description.append(hashtag2.get_text(strip=True))
+
+        except (TimeoutException, NoSuchElementException):
+            print(f"Dummy account {dummy_id}: Description expand button not found or clickable.")
+            
+        # 2. Open Sound Pop-up
+        try:
+            sound_elem = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "div#pivot-button"))
+            )
+            print(f"Dummy account {dummy_id}: Clicking sound popup.")
+            sound_elem.click()
+            human_like_delay(random.uniform(2, 5))
+
+            # RE-PARSE THE HTML AFTER CLICKING
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            sound_popup_elem = soup.find("yt-page-header-view-model")
+            
+            if sound_popup_elem:
+                # Get Sound Name
+                sound_name_elem = sound_popup_elem.find("yt-dynamic-text-view-model")
+                sound_name = sound_name_elem.get_text(strip=True, separator=' ') if sound_name_elem else "NaN"
+
+                # Get Sound Artist
+                sound_artist_elem = sound_popup_elem.find("yt-avatar-stack-view-model")
+                sound_artist = sound_artist_elem.get_text(strip=True, separator=' ') if sound_artist_elem else "NaN"
+
+                # Get Sound Usage Count (fixed to be more robust)
+                sound_usage_elem = sound_popup_elem.find("span", id="text", class_="yt-core-attributed-string")
+                sound_usage = sound_usage_elem.get_text(strip=True, separator=' ') if sound_usage_elem else remix_count
+
+                # Get Sound ID (from image src, as you correctly identified)
+                sound_id_elem = sound_popup_elem.find("yt-content-preview-image-view-model").find("img")
+                if sound_id_elem and 'src' in sound_id_elem.attrs:
+                    sound_img_src = sound_id_elem['src']
+                    match = re.search(r"https?://i\.ytimg\.com/vi/([a-zA-Z0-9_-]+)/", sound_img_src)
+                    if match:
+                        sound_id = match.group(1)
+                        print(f"Dummy account {dummy_id}: Found Sound ID: {sound_id} from image src.")
+                    else:
+                        print(f"Dummy account {dummy_id}: No Sound ID pattern found in image src: {sound_img_src}")
+                else:
+                    print(f"Dummy account {dummy_id}: No sound image element found or no src attribute.")
+            
+            # Navigate back to the shorts player (e.g., by closing the popup)
+            human_like_delay(random.uniform(1, 2))
+        except Exception as e:
+            print(f"Dummy account {dummy_id}: Error clicking sound popup: {e}")
+            return []
+
+        # --- APPEND ALL SCRAPED DATA ---
+        scraped_data.append({
+            'timestamp_scan': datetime.now().isoformat(),
+            'dummy_account_id': dummy_id,
+            'video_id': video_id,
+            'caption': caption,
+            'hashtags_on_caption': hashtags_on_caption,
+            'hashtags_on_description': hashtags_on_description,
+            'description': description,
+            'channel_name': channel_name,
+            'raw_views_count': raw_views_count,
+            'likes_count': likes_count,
+            'comments_count': comments_count,
+            'remix_count': remix_count,
+            'upload_date': upload_date,
+            'extracted_keywords': keywords,
+            'sound_id': sound_id,
+            'sound_name': sound_name,
+            'sound_artist': sound_artist,
+            'sound_usage': sound_usage,
+            'video_url_full': full_video_url,
+            'watch_duration_sec': watch_duration
+        })
+        scraped_video_ids.add(video_id)
+        
     except TimeoutException:
-        print(f"Timeout: Could not find 'ytd-reel-video-renderer' element after waiting.")
+        print(f"Timeout: Could not find shorts element after waiting.")
     except Exception as outer_exception:
         print(f"Error extracting shorts data from page for {dummy_id}: {outer_exception}")
-    
+        traceback.print_exc()
+
     return scraped_data
 
 # --- Function to Write Data to CSV (with safe file handling) ---
@@ -512,8 +522,14 @@ def dummy_account_task(dummy_info):
                     unique_scraped_data.append(item)
                     seen_ids.add(item['video_id'])
 
-            write_to_csv(unique_scraped_data, RAW_DATA_CSV, CSV_HEADERS)
-            print(f"Dummy account {dummy_id} scraped {len(unique_scraped_data)} unique videos and saved to CSV.")
+            if FORMAT_EXT == 'csv':
+                write_to_csv(unique_scraped_data, RAW_DATA_CSV, CSV_HEADERS)
+            elif FORMAT_EXT == 'json':
+                json_filename = RAW_DATA_CSV.replace('.csv', '.json')
+                with open(json_filename, 'w', encoding='utf-8') as json_file:
+                    json.dump(unique_scraped_data, json_file, ensure_ascii=False, indent=4)
+
+            print(f"Dummy account {dummy_id} scraped {len(unique_scraped_data)} unique videos and saved to {FORMAT_EXT}.")
         else:
             print(f"Dummy account {dummy_id} found no data.")
 
@@ -531,10 +547,11 @@ if __name__ == "__main__":
     calculate_window_layout()
 
     # Initialize CSV file if it doesn't exist (write header only)
-    if not os.path.exists(RAW_DATA_CSV) or os.path.getsize(RAW_DATA_CSV) == 0:
-        with open(RAW_DATA_CSV, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
-            writer.writeheader()
+    if FORMAT_EXT == 'csv':
+        if not os.path.exists(RAW_DATA_CSV) or os.path.getsize(RAW_DATA_CSV) == 0:
+            with open(RAW_DATA_CSV, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
+                writer.writeheader()
 
     threads = []
     for i, account_info in enumerate(DUMMY_ACCOUNTS):

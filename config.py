@@ -8,11 +8,11 @@ RAW_DATA_CSV = 'lhana_shorts_raw_data.csv'
 
 # CSV Headers: Defines the order and names of columns in the output CSV.
 CSV_HEADERS = [
-    'timestamp_scan', 'dummy_account_id', 'video_id', 'caption', 'hashtags',
-    'description', 'channel_name', 'channel_id', 'raw_views_count', 'likes_count',
-    'comments_count', 'remix_count', 'upload_date', 'extracted_keywords',
-    'sound_id', 'sound_name', 'sound_artist', 'video_url_full',
-    'watch_duration_sec', 'video_category'
+    'timestamp_scan', 'dummy_account_id', 'video_id', 'caption', 'hashtags_on_caption',
+    'hashtags_on_description', 'description', 'channel_name', 'raw_views_count',
+    'likes_count', 'comments_count', 'remix_count', 'upload_date', 'extracted_keywords',
+    'sound_id', 'sound_name', 'sound_artist', 'sound_usage', 'video_url_full',
+    'watch_duration_sec'
 ]
 
 # YouTube Data API Key (optional): Used for more accurate data if integrated.
@@ -22,7 +22,7 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "YOUR_FALLBACK_API_KEY_IF_NEEDED"
 
 # --- Scraping Behavior Configuration ---
 # Target number of unique shorts to scrape per dummy account.
-MAX_SHORTS_TO_SCRAPE_PER_ACCOUNT = 5 
+MAX_SHORTS_TO_SCRAPE_PER_ACCOUNT = 15 
 # Initial delay between starting each dummy account thread (in seconds).
 THREAD_START_DELAY_MIN = 5
 THREAD_START_DELAY_MAX = 15
@@ -47,7 +47,7 @@ DUMMY_ACCOUNTS = [
     {"id": "dummy_4", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 4"},
     {"id": "dummy_5", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 5"},
     {"id": "dummy_6", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 6"},
-    {"id": "dummy_7", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 7"},
+    # {"id": "dummy_7", "profile_path": "C:/Users/user/AppData/Local/Google/Chrome/User Data/Profile 7"},
     # Add more dummy accounts as needed
 ]
 
@@ -66,3 +66,6 @@ VPN_EXTENSIONS_BASE_PATH = os.path.join(os.getcwd(), 'extensions') # os.path.joi
 # Custom directory for Chromedriver (optional, if you encounter path issues).
 # If None, undetected_chromedriver will manage its own driver.
 CUSTOM_CHROMEDRIVER_DIR = os.path.join(os.getcwd(), 'chromedriver_custom') # os.path.join(os.getcwd(), 'chromedriver_custom') if you want a custom path
+
+# OUTPUT MODE
+FORMAT_EXT = 'csv'  # Options: 'csv', 'json'
